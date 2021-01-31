@@ -14,7 +14,8 @@ export class DynamoCopyTestStack extends cdk.Stack {
       partitionKey: { name: 'customer', type: dynamodb.AttributeType.STRING },
       sortKey: { name: 'userid', type: dynamodb.AttributeType.STRING },
       billingMode: dynamodb.BillingMode.PAY_PER_REQUEST,
-      stream: dynamodb.StreamViewType.NEW_IMAGE,
+      stream: dynamodb.StreamViewType.NEW_IMAGE,,
+      pointInTimeRecovery: true
     });
 
     const deadletter = new sqs.Queue(this, 'deadletter-queue');
