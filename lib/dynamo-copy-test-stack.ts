@@ -4,6 +4,9 @@ import * as lambda from '@aws-cdk/aws-lambda';
 import * as sqs from '@aws-cdk/aws-sqs';
 import * as path from 'path';
 import * as eventsources from '@aws-cdk/aws-lambda-event-sources';
+import * as s3 from '@aws-cdk/aws-s3';
+import * as iam from '@aws-cdk/aws-iam';
+import { PolicyDocument, PolicyStatement, ServicePrincipal } from '@aws-cdk/aws-iam';
 
 export class DynamoCopyTestStack extends cdk.Stack {
   constructor(scope: cdk.Construct, id: string, props?: cdk.StackProps) {
@@ -14,24 +17,41 @@ export class DynamoCopyTestStack extends cdk.Stack {
       partitionKey: { name: 'customer', type: dynamodb.AttributeType.STRING },
       sortKey: { name: 'userid', type: dynamodb.AttributeType.STRING },
       billingMode: dynamodb.BillingMode.PAY_PER_REQUEST,
-      stream: dynamodb.StreamViewType.NEW_IMAGE,,
+      stream: dynamodb.StreamViewType.NEW_IMAGE,
       pointInTimeRecovery: true
     });
 
     const deadletter = new sqs.Queue(this, 'deadletter-queue');
 
-    const lambdafunction = new lambda.Function(this, 'processing-function', {
+    const recordCopyLf = new lambda.Function(this, 'processing-function', {
       runtime: lambda.Runtime.NODEJS_12_X,
-      code: lambda.Code.fromAsset(path.join(__dirname, 'lambda-handler')),
-      handler: 'index.handler'
+      code: lambda.Code.fromAsset(path.join(__dirname, 'lambda-handlers')),
+      handler: 'processing.handler'
     });
-    lambdafunction.addEventSource(new eventsources.DynamoEventSource(table, {
+    recordCopyLf.addEventSource(new eventsources.DynamoEventSource(table, {
       startingPosition: lambda.StartingPosition.TRIM_HORIZON,
       batchSize: 5,
       bisectBatchOnError: true,
       onFailure: new eventsources.SqsDlq(deadletter),
       retryAttempts: 10
-    }))
+    }));
+    
+    const exportBucket = new s3.Bucket(this, 'backup-bucket');
 
-  }
+    const exportLr = new iam.Role(this, 'export-role', {
+      assumedBy: new ServicePrincipal('lambda.amazonaws.com')
+    });
+    const exportLf = new lambda.Function(this, 'export-function', {
+      runtime: lambda.Runtime.NODEJS_12_X,
+      code: lambda.Code.fromAsset(path.join(__dirname, 'lambda-handlers')),
+      handler: 'export.handler',
+      environment: {
+        S3_BUCKET_NAME: exportBucket.bucketName,
+        DYNAMODB_TABLE_ARN: table.tableArn
+      },
+      role: exportLr
+    });
+    exportBucket.grantReadWrite(exportLr);
+    table.grantFullAccess(exportLr);
+  };
 }
