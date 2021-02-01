@@ -7,6 +7,8 @@ import * as eventsources from '@aws-cdk/aws-lambda-event-sources';
 import * as s3 from '@aws-cdk/aws-s3';
 import * as iam from '@aws-cdk/aws-iam';
 import { PolicyDocument, PolicyStatement, ServicePrincipal } from '@aws-cdk/aws-iam';
+import { BucketEncryption, BucketNotificationDestinationType, EventType } from '@aws-cdk/aws-s3';
+import * as s3n from '@aws-cdk/aws-s3-notifications';
 
 export class DynamoCopyTestStack extends cdk.Stack {
   constructor(scope: cdk.Construct, id: string, props?: cdk.StackProps) {
@@ -35,8 +37,15 @@ export class DynamoCopyTestStack extends cdk.Stack {
       onFailure: new eventsources.SqsDlq(deadletter),
       retryAttempts: 10
     }));
+
+    const dataCleanLf = new lambda.Function(this, 'data-clean-function', {
+      runtime: lambda.Runtime.NODEJS_12_X,
+      code: lambda.Code.fromAsset(path.join(__dirname, 'lambda-handlers')),
+      handler: 'data-clean.handler'
+    });
     
     const exportBucket = new s3.Bucket(this, 'backup-bucket');
+    exportBucket.addEventNotification(EventType.OBJECT_CREATED, new s3n.LambdaDestination(dataCleanLf), { suffix: 'manifest-files.json' });
 
     const exportLr = new iam.Role(this, 'export-role', {
       assumedBy: new ServicePrincipal('lambda.amazonaws.com')
