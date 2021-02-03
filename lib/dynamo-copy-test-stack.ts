@@ -37,14 +37,20 @@ export class DynamoCopyTestStack extends cdk.Stack {
       onFailure: new eventsources.SqsDlq(deadletter),
       retryAttempts: 10
     }));
+    
+    const exportBucket = new s3.Bucket(this, 'backup-bucket');
 
+    const dataCleanLr = new iam.Role(this, 'data-clean-role', {
+      assumedBy: new ServicePrincipal('lambda.amazonaws.com')
+    });
     const dataCleanLf = new lambda.Function(this, 'data-clean-function', {
       runtime: lambda.Runtime.NODEJS_12_X,
       code: lambda.Code.fromAsset(path.join(__dirname, 'lambda-handlers')),
-      handler: 'data-clean.handler'
+      handler: 'data-clean.handler',
+      role: dataCleanLr
     });
-    
-    const exportBucket = new s3.Bucket(this, 'backup-bucket');
+    exportBucket.grantRead(dataCleanLr);
+
     exportBucket.addEventNotification(EventType.OBJECT_CREATED, new s3n.LambdaDestination(dataCleanLf), { suffix: 'manifest-files.json' });
 
     const exportLr = new iam.Role(this, 'export-role', {
@@ -62,5 +68,6 @@ export class DynamoCopyTestStack extends cdk.Stack {
     });
     exportBucket.grantReadWrite(exportLr);
     table.grantFullAccess(exportLr);
+    
   };
 }
