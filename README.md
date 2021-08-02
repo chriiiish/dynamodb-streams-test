@@ -1,6 +1,11 @@
-# Welcome to your CDK TypeScript project!
+# Dynamodb Streams Test
 
-This is a blank project for TypeScript development with CDK.
+This is a AWS CDK project written in TypeScript.
+
+## About
+The purpose of this is to test dynamodb streams to/from S3 buckets.
+
+----------
 
 The `cdk.json` file tells the CDK Toolkit how to execute your app.
 
